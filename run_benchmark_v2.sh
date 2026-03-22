@@ -57,8 +57,8 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python run_training.py \
     scenario_builder=nuplan \
     cache.cache_path=/nuplan/exp/cache_pluto \
     cache.use_cache_without_dataset=true \
-    data_loader.params.batch_size=64 \
-    data_loader.params.num_workers=16 \
+    data_loader.params.batch_size=384 \
+    data_loader.params.num_workers=32 \
     lr=1e-3 epochs=25 warmup_epochs=3 weight_decay=0.0001 \
     lightning.trainer.params.accelerator=gpu \
     lightning.trainer.params.devices=8 \
