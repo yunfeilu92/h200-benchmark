@@ -207,18 +207,116 @@ Feature Cache (~400GB)
 - 显存仅使用 12-20%（18-29 GB / 144 GB）
 - 功耗仅约 20% TDP（145W / 700W）
 - 模型规模较小，未充分利用 H200 的计算和显存能力
-- 可通过增大 batch_size 或使用更大模型进一步压榨 GPU
+
+## 优化迭代
+
+### 优化 1: 增大 batch_size（64 → 384）
+
+将总 batch_size 从 64 提升到 384（每卡 48），显存利用从 15% 提升到 55-75%。
+
+### 优化 2: BF16 混合精度
+
+从 FP32 切换到 BF16-mixed，需要升级环境：
+- Python 3.9 → 3.10（NATTEN 0.17.5 要求）
+- PyTorch 2.0.1+cu118 → 2.5.0+cu124（BF16 upsample 支持）
+- NATTEN 0.14.6 → 0.17.5
+- 修复 3 处 `torch.zeros` dtype 不匹配 + 1 处 `emb.weight` dtype 转换
+
+### 多卡配置对比
+
+| 配置 | Epoch 时间 | GPU 功耗 | 显存占用 | SM 利用率 |
+|------|-----------|---------|---------|----------|
+| 8 卡 FP32 bs=64 | ~39 min | ~145W | 18-29 GB (15%) | 50-96% |
+| 8 卡 FP32 bs=384 | ~30 min | ~130W | 80-128 GB (60%) | 100% |
+| 8 卡 BF16 bs=384 | **~21 min** | ~130W | 55-76 GB (45%) | 100% |
+| 2 卡 BF16 bs=384 | ~70 min (含 val) | **~220W** | 58-80 GB (48%) | 100% |
+| 1 卡 BF16 bs=384 | ~56 min | ~200W | 76-90 GB (57%) | 100% |
+
+**关键发现**：
+- 8 卡 DDP 并行效率仅 ~34%（理论 8 倍加速，实际 2.7 倍）
+- 2 卡功耗最高（220W），DDP 开销最小
+- BF16 vs FP32 提速 46%（39min → 21min）
+
+## 性能瓶颈深度分析
+
+### PyTorch Profiler 实测数据
+
+使用 PyTorch Profiler 对单卡 BF16 bs=384 的 forward pass 做了 kernel 级分析（10 次前向推理）：
+
+| 操作 | CUDA 时间 | 占比 | 类型 |
+|------|----------|------|------|
+| **upsample_linear1d** | **5051ms** | **89.4%** | 内存带宽操作（FPN 上采样） |
+| layer_norm | 162ms | 2.9% | Element-wise |
+| copy_ (dtype 转换) | 131ms | 2.3% | 内存操作 |
+| baddbmm (Attention QKV) | 92ms | 1.6% | **Tensor Core** |
+| _to_copy | 78ms | 1.4% | 内存操作 |
+| NATTEN QK | 61ms | 1.1% | Tensor Core (Sm80 kernel) |
+| bmm (矩阵乘) | 56ms | 1.0% | **Tensor Core** |
+| softmax | 48ms | 0.8% | Element-wise |
+| NATTEN AV | 37ms | 0.7% | Tensor Core |
+| index | 34ms | 0.6% | 内存操作 |
+| **总计** | **5651ms** | | |
+
+### 模型基本信息
+
+```
+参数量: 4,058,689 (4M params, 7.7 MB BF16)
+架构: dim=128, 4 encoder + 4 decoder, 4 heads, 12 modes
+单步 Forward: 570.6 ms (bs=384)
+吞吐量: 673 samples/sec
+```
+
+### 算力利用率
+
+| 指标 | 实测值 | H200 峰值 | 利用率 |
+|------|--------|----------|--------|
+| MatMul TFLOPS | 14.8 | 1979 (BF16) | **0.75%** |
+| MatMul 时间占比 | 2.6% | - | - |
+| GPU 功耗 | 130-220W | 700W | 19-31% |
+
+### 瓶颈根因
+
+**89.4% 的 GPU 时间花在 `upsample_linear1d`（FPN 特征金字塔上采样）**，该操作位于 `src/models/pluto/layers/embedding.py:78`（NATSequenceEncoder 的 FPN 模块）。
+
+```python
+# embedding.py:78 - 占 89.4% GPU 时间的操作
+laterals[i - 1] = laterals[i - 1] + F.interpolate(
+    laterals[i],
+    scale_factor=(...),
+    mode="linear",        # 线性插值，不走 Tensor Core
+    align_corners=False,
+)
+```
+
+该操作特点：
+1. **不走 Tensor Core**：线性插值是 element-wise 内存操作，只用 CUDA Core
+2. **调用量大**：每个 forward 对 384×49=18,816 个 agent 序列分别做 FPN 上采样
+3. **计算密度低**：每个元素只做 1 次乘法 + 1 次加法，但需要读写显存
+
+**真正用到 Tensor Core 的矩阵运算（baddbmm + bmm）只占 2.6% 时间**，且 GEMM 维度仅 128×128，远小于 H200 的 528 个 Tensor Core 能并行处理的规模。
+
+### 结论
+
+H200 在 Pluto 上的低利用率**不是**简单的"模型太小"——而是模型架构中 89% 的计算时间花在了一个内存带宽瓶颈操作上，Tensor Core（H200 的核心优势）几乎没有参与。即使优化掉 upsample，dim=128 的 GEMM 也无法填满 H200 的 Tensor Core 阵列。
+
+### 优化建议
+
+| 优化项 | 预期训练加速 | H200 算力利用率改善 | 工作量 |
+|--------|-----------|------------------|--------|
+| 将 FPN upsample 从 linear 改为 nearest | ~33% (21→14 min) | 微乎其微 | 1 行代码 |
+| 优化 DataLoader (pin_memory, prefetch) | ~20% | 无 | 中等 |
+| torch.compile | ~10-20% | 略有提升 | 几行代码 |
+| 换更大模型 (dim=512+) | - | **根本解决** | 换算法 |
+| 多任务并行 (不同模型分卡跑) | - | **整机利用率提升** | 运维 |
 
 ## 文件清单
 
 | 文件 | 用途 |
 |------|------|
-| setup.sh | 初始环境搭建脚本 |
-| setup_fix.sh | 修复 pip/conda 兼容性问题 |
+| setup.sh | 环境搭建脚本（合并版） |
 | download_data.sh | nuPlan 数据集下载脚本 |
-| run_benchmark.sh | Benchmark 脚本 v1 |
-| run_benchmark_v2.sh | Benchmark 脚本 v2（当前使用） |
-| h200-benchmark.pem | SSH 密钥 |
+| run_benchmark_v2.sh | Benchmark 训练脚本 |
+| profile_pluto.py | GPU 性能分析脚本 |
 
 ## SSH 访问
 
@@ -226,14 +324,11 @@ Feature Cache (~400GB)
 ssh -i h200-benchmark.pem ubuntu@<PUBLIC_IP>
 
 # 检查训练进度
-tail -f /home/ubuntu/benchmark_v5.log
+tail -f /home/ubuntu/benchmark_bf16_v3.log
 
 # 检查 GPU 状态
 nvidia-smi
 
-# 查看 checkpoint
-ls -lh /nuplan/exp/exp/training/pluto/2026.03.22.10.27.43/checkpoints/
-
 # 查看 GPU 监控日志
-cat /home/ubuntu/gpu_monitor.log
+cat /home/ubuntu/gpu_monitor_bf16.log
 ```
