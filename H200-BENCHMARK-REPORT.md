@@ -349,11 +349,48 @@ F.interpolate(laterals[i], scale_factor=(...), mode="nearest")
 
 优化 upsample 后功耗从 130W 升到 245W（35% TDP），但距离 700W 满载仍有差距。根因是 dim=128 的 GEMM 太小，Tensor Core 无法填满。这是模型架构限制，在不改模型的前提下无解。
 
+## Nearest vs Linear 模型精度对比（进行中）
+
+为验证 FPN upsample 从 linear 改为 nearest 对模型效果的影响，进行串行 A/B 对比实验。
+
+### 实验设置
+
+- 条件完全相同：8 卡 BF16 bs=384，10 epochs，warmup=3
+- 串行执行（避免 IO 争抢导致不公平）：先 nearest → 再 linear
+- Loss 从 checkpoint 的 ModelCheckpoint callback 中提取
+
+### Nearest 结果（已完成，76 分钟）
+
+| Epoch | val_loss |
+|-------|---------|
+| 5 | 5.184 |
+| 6 | 4.891 |
+| 7 | 4.819 |
+| 8 | 4.870 |
+| 9 | **4.818** |
+
+训练时间：06:38 → 07:54 UTC = 76 分钟（10 epochs）
+
+### Linear 结果
+
+进行中，预计约 3.5 小时完成。
+
+### DataLoader 配置检查
+
+| 参数 | 当前值 | 最优值 | 说明 |
+|------|--------|--------|------|
+| pin_memory | **True** ✅ | True | 已通过 `${gpu}` 自动开启 |
+| persistent_workers | 未设置 | True | 每 epoch 重建 worker 有开销 |
+| prefetch_factor | 默认 2 | 4 | 可提前准备更多 batch |
+| num_workers | 32 | 32 | 已设较高值 |
+
+pin_memory 已生效，persistent_workers 和 prefetch_factor 可后续优化。
+
 ### 进一步优化方向
 
 | 优化项 | 预期收益 | 工作量 |
 |--------|---------|--------|
-| 优化 DataLoader (pin_memory, prefetch) | ~20% 训练加速 | 中等 |
+| persistent_workers + prefetch_factor | ~10-15% 训练加速 | 配置修改 |
 | torch.compile | ~10-20% | 几行代码 |
 | 换更大模型 (dim=512+) | **根本解决 GPU 利用率** | 换算法 |
 | 多任务并行 (不同模型分卡跑) | **整机利用率提升** | 运维 |
