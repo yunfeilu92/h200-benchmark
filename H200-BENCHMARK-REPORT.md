@@ -349,7 +349,7 @@ F.interpolate(laterals[i], scale_factor=(...), mode="nearest")
 
 优化 upsample 后功耗从 130W 升到 245W（35% TDP），但距离 700W 满载仍有差距。根因是 dim=128 的 GEMM 太小，Tensor Core 无法填满。这是模型架构限制，在不改模型的前提下无解。
 
-## Nearest vs Linear 模型精度对比（进行中）
+## Nearest vs Linear 模型精度对比
 
 为验证 FPN upsample 从 linear 改为 nearest 对模型效果的影响，进行串行 A/B 对比实验。
 
@@ -359,21 +359,31 @@ F.interpolate(laterals[i], scale_factor=(...), mode="nearest")
 - 串行执行（避免 IO 争抢导致不公平）：先 nearest → 再 linear
 - Loss 从 checkpoint 的 ModelCheckpoint callback 中提取
 
-### Nearest 结果（已完成，76 分钟）
+### 逐 Epoch val_loss 对比
 
-| Epoch | val_loss |
-|-------|---------|
-| 5 | 5.184 |
-| 6 | 4.891 |
-| 7 | 4.819 |
-| 8 | 4.870 |
-| 9 | **4.818** |
+| Epoch | Nearest | Linear | Linear 更优 |
+|-------|---------|--------|------------|
+| 5 | 5.184 | 4.912 | -5.25% |
+| 6 | 4.891 | 4.848 | -0.88% |
+| 7 | 4.819 | 4.767 | -1.08% |
+| 8 | 4.870 | 4.731 | -2.85% |
+| 9 | **4.818** | **4.698** | **-2.51%** |
 
-训练时间：06:38 → 07:54 UTC = 76 分钟（10 epochs）
+### 训练效率对比
 
-### Linear 结果
+| 指标 | Nearest | Linear | 差异 |
+|------|---------|--------|------|
+| 10 epochs 总时间 | **76 min** | 202 min | nearest 快 2.7x |
+| 最终 val_loss | 4.818 | **4.698** | linear 低 2.51% |
+| GPU 功耗 | ~245W | ~130W | nearest 高 88% |
 
-进行中，预计约 3.5 小时完成。
+### 结论
+
+- Linear 的 val_loss 比 nearest **低 2.5%**，但训练**慢 2.7 倍**
+- 两者都收敛到 4.7-4.8 的范围，差距较小
+- 2.5% 的 val_loss 差异在自动驾驶规划场景中影响有限（闭环仿真指标如碰撞率、完成率通常不敏感于此量级差异）
+- **如果追求训练速度**：用 nearest（76 min vs 202 min）
+- **如果追求最优精度**：保持 linear
 
 ### DataLoader 配置检查
 
