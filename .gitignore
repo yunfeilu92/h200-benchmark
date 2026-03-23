@@ -1,3 +1,4 @@
 *.pem
 *.key
 CLAUDE.md
+__pycache__/
