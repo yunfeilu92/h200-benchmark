@@ -4,12 +4,8 @@ set -ex
 echo "=== G6e (8x L40S) Benchmark ==="
 echo "Start time: $(date)"
 
-# Activate conda env
-source /opt/conda/etc/profile.d/conda.sh
-conda activate pluto310
-
-# Fix libstdc++ compatibility
-export LD_PRELOAD=/opt/conda/envs/pluto310/lib/libstdc++.so.6
+# Activate venv
+source /home/ubuntu/pluto-env/bin/activate
 
 # Set paths - all on NVMe
 export NUPLAN_DATA_ROOT=/nuplan/dataset
@@ -34,6 +30,10 @@ export CUDA_DEVICE_MAX_CONNECTIONS=1     # 改善 compute/communication overlap
 # PyTorch 性能优化
 export TORCH_CUDNN_V8_API_ENABLED=1      # 启用 cuDNN v8 API
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True  # 优化显存分配
+
+# Ray worker GPU 可见性 - 防止 NATTEN import 时找不到 GPU
+export RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO=0
+export HYDRA_FULL_ERROR=1
 
 # ============================================================
 # L40S 特定训练参数调整（对比 H200）:
@@ -96,7 +96,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python run_training.py \
     cache.use_cache_without_dataset=true \
     data_loader.params.batch_size=384 \
     data_loader.params.num_workers=16 \
-    lr=1e-3 epochs=25 warmup_epochs=3 weight_decay=0.0001 \
+    lr=1e-3 epochs=3 warmup_epochs=1 weight_decay=0.0001 \
     lightning.trainer.params.accelerator=gpu \
     lightning.trainer.params.devices=8 \
     lightning.trainer.params.strategy=ddp_find_unused_parameters_false \
