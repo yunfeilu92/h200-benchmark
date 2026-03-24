@@ -70,15 +70,34 @@
 - 功耗: 167-195 W/卡 (48-56% TDP)
 - 代码零改动
 
+### FP32 + ConvTranspose1d (bs=128, 16/卡) — 优化版
+
+将 FPN 中 `F.interpolate(mode="linear")` 替换为 learnable `nn.ConvTranspose1d`。
+
+| Epoch | 完成时间 (UTC) | 耗时 |
+|-------|---------------|------|
+| 0 | 04:30 | ~16 min |
+| 1 | 04:43 | ~13 min |
+| 2 | 04:56 | ~13 min |
+| **总计** | | **~42 min** |
+
+- 显存: 27-45 GB/卡
+- 功耗: 177-229 W/卡 (51-65% TDP) — 比 linear 版本显著提高
+- 代码改动: embedding.py (+7 行 __init__, 改 forward 5→4 行), pluto_trainer.py (+1 行 whitelist)
+- 新增参数: ~98K (模型从 4.1M → 4.2M, +2.4%)
+
 ### 对比总结
 
-| 配置 | 每卡 batch | Epoch 时间 | 3 Epoch 总计 | 代码改动 |
-|------|-----------|-----------|-------------|---------|
-| BF16 bs=192 | 24 | ~25 min | ~76 min | 4 处 dtype patch |
-| FP32 bs=128 | 16 | ~26 min | ~79 min | 无 |
-| H200 BF16 bs=384 (参考) | 48 | ~39 min | ~117 min* | 1 处 dtype patch |
+| 配置 | 每卡 batch | Epoch 时间 | 3 Epoch 总计 | vs 原始 | 代码改动 |
+|------|-----------|-----------|-------------|---------|---------|
+| FP32 + linear (原始) | 16 | ~26 min | ~79 min | baseline | 无 |
+| BF16 + linear | 24 | ~25 min | ~76 min | -4% | 4 处 dtype patch |
+| **FP32 + ConvTranspose1d** | **16** | **~14 min** | **~42 min** | **-47%** | embedding.py + trainer.py |
+| H200 BF16 bs=384 (参考) | 48 | ~39 min | ~117 min* | — | 1 处 dtype patch |
 
 *H200 数据为 25 epoch 训练的 per-epoch 平均值
+
+**关键结论**: 在 Pluto 模型上，消除 `F.interpolate(mode="linear")` 瓶颈（ConvTranspose1d 替换）比切换 BF16 精度（4%）带来的加速大一个数量级（47%）。GPU 功耗从 ~100-195W 提升到 ~177-229W，说明 GPU 被更充分利用。
 
 ## CUDA Kernel Profile 分析
 
@@ -141,7 +160,7 @@
 | 方案 | 预期效果 | 改动量 | 状态 |
 |------|---------|--------|------|
 | 改 `mode="nearest"` | 省 ~60% GPU 时间 | 改 1 行 | 待测试 |
-| 改 learnable ConvTranspose1d | 省 ~60% + 走 Tensor Core + 可学习 | 改 ~15 行 | 待测试 |
+| 改 learnable ConvTranspose1d | 省 ~63% GPU 时间, 训练加速 47% | 改 ~15 行 | ✅ **已验证: 79min→42min** |
 | `torch.compile` | 省 ~5% (仅小操作) | 加 1 行 | ❌ 对瓶颈无效 |
 | 禁用 RichProgressBar | 省 ~15% 训练时间 (PL overhead) | 加 1 行配置 | 待测试 |
 
