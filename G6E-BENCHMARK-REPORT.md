@@ -86,18 +86,39 @@
 - 代码改动: embedding.py (+7 行 __init__, 改 forward 5→4 行), pluto_trainer.py (+1 行 whitelist)
 - 新增参数: ~98K (模型从 4.1M → 4.2M, +2.4%)
 
+### FP32 + nearest (bs=128, 16/卡) — 最优方案
+
+将 FPN 中 `F.interpolate(mode="linear")` 改为 `mode="nearest"`，同时删除 `align_corners=False`。
+
+| Epoch | 完成时间 (UTC) | 耗时 |
+|-------|---------------|------|
+| 0 | 06:15 | ~16 min |
+| 1 | 06:28 | ~13 min |
+| 2 | 06:41 | ~13 min |
+| **总计** | | **~42 min** |
+
+- 显存: 31-41 GB/卡
+- 功耗: 176-246 W/卡 (50-70% TDP)
+- 代码改动: embedding.py 改 1 行 (mode="linear" → mode="nearest")，删 1 行 (align_corners)
+- 新增参数: 0
+
 ### 对比总结
 
-| 配置 | 每卡 batch | Epoch 时间 | 3 Epoch 总计 | vs 原始 | 代码改动 |
-|------|-----------|-----------|-------------|---------|---------|
-| FP32 + linear (原始) | 16 | ~26 min | ~79 min | baseline | 无 |
-| BF16 + linear | 24 | ~25 min | ~76 min | -4% | 4 处 dtype patch |
-| **FP32 + ConvTranspose1d** | **16** | **~14 min** | **~42 min** | **-47%** | embedding.py + trainer.py |
-| H200 BF16 bs=384 (参考) | 48 | ~39 min | ~117 min* | — | 1 处 dtype patch |
+| 配置 | 每卡 batch | Epoch 时间 | 3 Epoch 总计 | vs 原始 | val_loss | 代码改动 |
+|------|-----------|-----------|-------------|---------|---------|---------|
+| FP32 + linear (原始) | 16 | ~26 min | ~79 min | baseline | 3.706 | 无 |
+| BF16 + linear | 24 | ~25 min | ~76 min | -4% | 4.077 | 4 处 dtype patch |
+| FP32 + ConvTranspose1d | 16 | ~14 min | ~42 min | -47% | 3.783 | embedding.py + trainer.py |
+| **FP32 + nearest** | **16** | **~14 min** | **~42 min** | **-47%** | **3.617** | **改 1 行** |
+| H200 BF16 bs=384 (参考) | 48 | ~39 min | ~117 min* | — | — | 1 处 dtype patch |
 
 *H200 数据为 25 epoch 训练的 per-epoch 平均值
 
-**关键结论**: 在 Pluto 模型上，消除 `F.interpolate(mode="linear")` 瓶颈（ConvTranspose1d 替换）比切换 BF16 精度（4%）带来的加速大一个数量级（47%）。GPU 功耗从 ~100-195W 提升到 ~177-229W，说明 GPU 被更充分利用。
+**关键结论**:
+1. `F.interpolate(mode="linear")` 是 Pluto 在 L40S 上的压倒性瓶颈（63.6% GPU 时间）
+2. 改为 `mode="nearest"` 是最优方案：速度快 47%，val_loss 反而更低（3.617 vs 3.706），且只改 1 行代码
+3. BF16 精度切换在此模型上收效甚微（-4% 速度），且 val_loss 显著恶化（+10%），可能与 BF16 下 `F.interpolate(linear)` 的梯度偏差有关
+4. ConvTranspose1d 速度与 nearest 相当，但 val_loss 略高（3.783），且需要更多代码改动和额外参数
 
 ## CUDA Kernel Profile 分析
 
@@ -159,8 +180,8 @@
 
 | 方案 | 预期效果 | 改动量 | 状态 |
 |------|---------|--------|------|
-| 改 `mode="nearest"` | 省 ~60% GPU 时间 | 改 1 行 | 待测试 |
-| 改 learnable ConvTranspose1d | 省 ~63% GPU 时间, 训练加速 47% | 改 ~15 行 | ✅ **已验证: 79min→42min** |
+| 改 `mode="nearest"` | 省 63% GPU 时间, 训练加速 47%, loss 更低 | 改 1 行 | ✅ **最优: 79min→42min, loss 3.706→3.617** |
+| 改 learnable ConvTranspose1d | 省 63% GPU 时间, 训练加速 47% | 改 ~15 行 | ✅ 已验证: 79min→42min, loss 3.783 |
 | `torch.compile` | 省 ~5% (仅小操作) | 加 1 行 | ❌ 对瓶颈无效 |
 | 禁用 RichProgressBar | 省 ~15% 训练时间 (PL overhead) | 加 1 行配置 | 待测试 |
 
