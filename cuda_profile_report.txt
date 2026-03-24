@@ -1,0 +1,116 @@
+=== CUDA TIME TOTAL ===
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg     Self CUDA   Self CUDA %    CUDA total  CUDA time avg    # of Calls  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                          ProfilerStep*         0.00%       0.000us         0.00%       0.000us       0.000us     723.023ms       177.60%     723.023ms      60.252ms            12  
+                                          ProfilerStep*        41.97%        1.067s        69.61%        1.770s     147.471ms       0.000us         0.00%     179.526ms      14.961ms            12  
+autograd::engine::evaluate_function: UpsampleLinear1...         0.01%     133.783us         0.04%     921.376us      38.391us       0.000us         0.00%     142.349ms       5.931ms            24  
+                              UpsampleLinear1DBackward0         0.00%      87.282us         0.03%     787.593us      32.816us       0.000us         0.00%     142.349ms       5.931ms            24  
+                       aten::upsample_linear1d_backward         0.01%     222.006us         0.03%     700.311us      29.180us     142.318ms        34.96%     142.349ms       5.931ms            24  
+void at::native::(anonymous namespace)::upsample_lin...         0.00%       0.000us         0.00%       0.000us       0.000us     142.318ms        34.96%     142.318ms       5.930ms            24  
+                                aten::upsample_linear1d         0.07%       1.725ms         0.09%       2.252ms      93.824us     116.429ms        28.60%     116.472ms       4.853ms            24  
+void at::native::(anonymous namespace)::upsample_lin...         0.00%       0.000us         0.00%       0.000us       0.000us     116.429ms        28.60%     116.429ms       4.851ms            24  
+                              Optimizer.step#AdamW.step         0.00%       0.000us         0.00%       0.000us       0.000us      87.364ms        21.46%      87.364ms       7.280ms            12  
+                                               aten::mm         2.81%      71.391ms         4.53%     115.266ms      31.806us      30.863ms         7.58%      31.179ms       8.604us          3624  
+    autograd::engine::evaluate_function: AddmmBackward0         0.81%      20.683ms         6.54%     166.191ms     133.166us       0.000us         0.00%      29.942ms      23.992us          1248  
+                                           aten::linear         0.41%      10.467ms         4.93%     125.391ms      75.719us       0.000us         0.00%      26.944ms      16.270us          1656  
+                                         AddmmBackward0         0.53%      13.496ms         4.30%     109.199ms      87.499us       0.000us         0.00%      23.414ms      18.761us          1248  
+                                            aten::addmm         1.58%      40.261ms         2.15%      54.684ms      43.817us      22.893ms         5.62%      22.893ms      18.344us          1248  
+                        ampere_sgemm_32x32_sliced1x4_tn         0.00%       0.000us         0.00%       0.000us       0.000us      10.704ms         2.63%      10.704ms      16.519us           648  
+                                              aten::sum         1.29%      32.683ms         2.11%      53.714ms      26.486us      10.142ms         2.49%      10.247ms       5.053us          2028  
+autograd::engine::evaluate_function: NativeLayerNorm...         0.44%      11.243ms         2.44%      62.122ms      83.498us       0.000us         0.00%       8.882ms      11.938us           744  
+void at::native::reduce_kernel<128, 4, at::native::R...         0.00%       0.000us         0.00%       0.000us       0.000us       8.444ms         2.07%       8.444ms       5.063us          1668  
+                               NativeLayerNormBackward0         0.18%       4.518ms         1.77%      45.004ms      60.489us       0.000us         0.00%       8.303ms      11.160us           744  
+                       aten::native_layer_norm_backward         0.47%      11.842ms         1.59%      40.486ms      54.416us       7.585ms         1.86%       8.303ms      11.160us           744  
+                                            aten::copy_         1.21%      30.823ms         2.70%      68.685ms      16.736us       7.792ms         1.91%       7.792ms       1.899us          4104  
+                              Optimizer.step#AdamW.step         1.99%      50.714ms         4.85%     123.252ms      10.271ms       0.000us         0.00%       7.600ms     633.362us            12  
+                                 ampere_sgemm_32x128_tn         0.00%       0.000us         0.00%       0.000us       0.000us       6.694ms         1.64%       6.694ms      19.236us           348  
+void at::native::elementwise_kernel<128, 2, at::nati...         0.00%       0.000us         0.00%       0.000us       0.000us       6.484ms         1.59%       6.484ms       2.111us          3072  
+autograd::engine::evaluate_function: ConvolutionBack...         0.04%     961.344us         0.62%      15.844ms     188.614us       0.000us         0.00%       6.261ms      74.539us            84  
+                                   ConvolutionBackward0         0.03%     655.560us         0.59%      14.882ms     177.169us       0.000us         0.00%       6.261ms      74.539us            84  
+                             aten::convolution_backward         0.24%       6.101ms         0.56%      14.227ms     169.365us       5.342ms         1.31%       6.261ms      74.539us            84  
+                                              aten::bmm         0.83%      21.168ms         1.16%      29.565ms      27.682us       5.493ms         1.35%       5.493ms       5.143us          1068  
+                                 aten::_index_put_impl_         0.23%       5.862ms         6.29%     159.870ms     666.125us       3.420ms         0.84%       5.355ms      22.311us           240  
+       autograd::engine::evaluate_function: MmBackward0         0.15%       3.737ms         1.62%      41.107ms     100.753us       0.000us         0.00%       5.148ms      12.618us           408  
+                                            MmBackward0         0.18%       4.490ms         1.47%      37.371ms      91.595us       0.000us         0.00%       5.148ms      12.618us           408  
+                                            aten::clone         0.43%      10.809ms         3.19%      81.026ms      31.552us       0.000us         0.00%       5.055ms       1.968us          2568  
+_ZN6natten4cuda4gemm6KernelIN7cutlass4arch4Sm80ENS1_...         0.00%       0.000us         0.00%       0.000us       0.000us       4.754ms         1.17%       4.754ms      33.011us           144  
+                        ampere_sgemm_64x32_sliced1x4_nn         0.00%       0.000us         0.00%       0.000us       0.000us       4.558ms         1.12%       4.558ms       5.755us           792  
+                                            aten::index         0.27%       6.804ms         1.41%      35.816ms     129.768us       2.504ms         0.62%       4.237ms      15.352us           276  
+void cublasLt::splitKreduce_kernel<32, 16, int, floa...         0.00%       0.000us         0.00%       0.000us       0.000us       4.111ms         1.01%       4.111ms       2.051us          2004  
+autograd::engine::evaluate_function: NeighborhoodAtt...         0.04%     952.772us         0.63%      16.002ms     222.252us       0.000us         0.00%       3.876ms      53.837us            72  
+      NeighborhoodAttention1DAVAutogradFunctionBackward         0.33%       8.296ms         0.59%      15.049ms     209.019us       3.722ms         0.91%       3.876ms      53.837us            72  
+void cutlass::Kernel2<cutlass_80_simt_sgemm_128x256_...         0.00%       0.000us         0.00%       0.000us       0.000us       3.736ms         0.92%       3.736ms     311.327us            12  
+                                 ampere_sgemm_128x64_nn         0.00%       0.000us         0.00%       0.000us       0.000us       3.732ms         0.92%       3.732ms     103.677us            36  
+    autograd::engine::evaluate_function: IndexBackward0         0.03%     732.003us         1.24%      31.598ms     376.169us       0.000us         0.00%       3.287ms      39.131us            84  
+                                         IndexBackward0         0.02%     617.559us         1.21%      30.866ms     367.454us       0.000us         0.00%       3.287ms      39.131us            84  
+                                          aten::nonzero         0.64%      16.254ms         6.43%     163.383ms     316.634us       3.241ms         0.80%       3.241ms       6.280us           516  
+autograd::engine::evaluate_function: SelectBackward0...         0.28%       7.207ms         2.04%      51.954ms      68.723us       0.000us         0.00%       3.218ms       4.257us           756  
+                                           aten::matmul         0.12%       2.941ms         1.36%      34.558ms      84.700us       0.000us         0.00%       3.184ms       7.805us           408  
+                                       aten::layer_norm         0.06%       1.563ms         1.55%      39.457ms      53.034us       0.000us         0.00%       3.180ms       4.274us           744  
+                                aten::native_layer_norm         0.72%      18.404ms         1.49%      37.894ms      50.933us       3.007ms         0.74%       3.180ms       4.274us           744  
+void cutlass::Kernel2<cutlass_80_simt_sgemm_128x64_8...         0.00%       0.000us         0.00%       0.000us       0.000us       3.135ms         0.77%       3.135ms       6.075us           516  
+void at::native::(anonymous namespace)::vectorized_l...         0.00%       0.000us         0.00%       0.000us       0.000us       3.007ms         0.74%       3.007ms       4.396us           684  
+                                            aten::fill_         0.49%      12.459ms         1.15%      29.202ms      14.148us       2.965ms         0.73%       2.965ms       1.437us          2064  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+Self CPU time total: 2.542s
+Self CUDA time total: 407.103ms
+
+
+=== SELF CUDA TIME ===
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg     Self CUDA   Self CUDA %    CUDA total  CUDA time avg    # of Calls  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                          ProfilerStep*         0.00%       0.000us         0.00%       0.000us       0.000us     723.023ms       177.60%     723.023ms      60.252ms            12  
+                       aten::upsample_linear1d_backward         0.01%     222.006us         0.03%     700.311us      29.180us     142.318ms        34.96%     142.349ms       5.931ms            24  
+void at::native::(anonymous namespace)::upsample_lin...         0.00%       0.000us         0.00%       0.000us       0.000us     142.318ms        34.96%     142.318ms       5.930ms            24  
+                                aten::upsample_linear1d         0.07%       1.725ms         0.09%       2.252ms      93.824us     116.429ms        28.60%     116.472ms       4.853ms            24  
+void at::native::(anonymous namespace)::upsample_lin...         0.00%       0.000us         0.00%       0.000us       0.000us     116.429ms        28.60%     116.429ms       4.851ms            24  
+                              Optimizer.step#AdamW.step         0.00%       0.000us         0.00%       0.000us       0.000us      87.364ms        21.46%      87.364ms       7.280ms            12  
+                                               aten::mm         2.81%      71.391ms         4.53%     115.266ms      31.806us      30.863ms         7.58%      31.179ms       8.604us          3624  
+                                            aten::addmm         1.58%      40.261ms         2.15%      54.684ms      43.817us      22.893ms         5.62%      22.893ms      18.344us          1248  
+                        ampere_sgemm_32x32_sliced1x4_tn         0.00%       0.000us         0.00%       0.000us       0.000us      10.704ms         2.63%      10.704ms      16.519us           648  
+                                              aten::sum         1.29%      32.683ms         2.11%      53.714ms      26.486us      10.142ms         2.49%      10.247ms       5.053us          2028  
+void at::native::reduce_kernel<128, 4, at::native::R...         0.00%       0.000us         0.00%       0.000us       0.000us       8.444ms         2.07%       8.444ms       5.063us          1668  
+                                            aten::copy_         1.21%      30.823ms         2.70%      68.685ms      16.736us       7.792ms         1.91%       7.792ms       1.899us          4104  
+                       aten::native_layer_norm_backward         0.47%      11.842ms         1.59%      40.486ms      54.416us       7.585ms         1.86%       8.303ms      11.160us           744  
+                                 ampere_sgemm_32x128_tn         0.00%       0.000us         0.00%       0.000us       0.000us       6.694ms         1.64%       6.694ms      19.236us           348  
+void at::native::elementwise_kernel<128, 2, at::nati...         0.00%       0.000us         0.00%       0.000us       0.000us       6.484ms         1.59%       6.484ms       2.111us          3072  
+                                              aten::bmm         0.83%      21.168ms         1.16%      29.565ms      27.682us       5.493ms         1.35%       5.493ms       5.143us          1068  
+                             aten::convolution_backward         0.24%       6.101ms         0.56%      14.227ms     169.365us       5.342ms         1.31%       6.261ms      74.539us            84  
+_ZN6natten4cuda4gemm6KernelIN7cutlass4arch4Sm80ENS1_...         0.00%       0.000us         0.00%       0.000us       0.000us       4.754ms         1.17%       4.754ms      33.011us           144  
+                        ampere_sgemm_64x32_sliced1x4_nn         0.00%       0.000us         0.00%       0.000us       0.000us       4.558ms         1.12%       4.558ms       5.755us           792  
+void cublasLt::splitKreduce_kernel<32, 16, int, floa...         0.00%       0.000us         0.00%       0.000us       0.000us       4.111ms         1.01%       4.111ms       2.051us          2004  
+void cutlass::Kernel2<cutlass_80_simt_sgemm_128x256_...         0.00%       0.000us         0.00%       0.000us       0.000us       3.736ms         0.92%       3.736ms     311.327us            12  
+                                 ampere_sgemm_128x64_nn         0.00%       0.000us         0.00%       0.000us       0.000us       3.732ms         0.92%       3.732ms     103.677us            36  
+      NeighborhoodAttention1DAVAutogradFunctionBackward         0.33%       8.296ms         0.59%      15.049ms     209.019us       3.722ms         0.91%       3.876ms      53.837us            72  
+                                 aten::_index_put_impl_         0.23%       5.862ms         6.29%     159.870ms     666.125us       3.420ms         0.84%       5.355ms      22.311us           240  
+                                          aten::nonzero         0.64%      16.254ms         6.43%     163.383ms     316.634us       3.241ms         0.80%       3.241ms       6.280us           516  
+void cutlass::Kernel2<cutlass_80_simt_sgemm_128x64_8...         0.00%       0.000us         0.00%       0.000us       0.000us       3.135ms         0.77%       3.135ms       6.075us           516  
+                                aten::native_layer_norm         0.72%      18.404ms         1.49%      37.894ms      50.933us       3.007ms         0.74%       3.180ms       4.274us           744  
+void at::native::(anonymous namespace)::vectorized_l...         0.00%       0.000us         0.00%       0.000us       0.000us       3.007ms         0.74%       3.007ms       4.396us           684  
+                                            aten::fill_         0.49%      12.459ms         1.15%      29.202ms      14.148us       2.965ms         0.73%       2.965ms       1.437us          2064  
+void at::native::(anonymous namespace)::GammaBetaBac...         0.00%       0.000us         0.00%       0.000us       0.000us       2.893ms         0.71%       2.893ms      17.218us           168  
+void at::native::vectorized_elementwise_kernel<4, at...         0.00%       0.000us         0.00%       0.000us       0.000us       2.867ms         0.70%       2.867ms       1.562us          1836  
+                                             aten::add_         0.63%      15.891ms         1.00%      25.464ms       3.894us       2.863ms         0.70%       2.863ms       0.438us          6540  
+                                  ampere_sgemm_64x64_tn         0.00%       0.000us         0.00%       0.000us       0.000us       2.762ms         0.68%       2.762ms     230.184us            12  
+_ZN6natten4cuda4gemm6KernelIN7cutlass4arch4Sm80ENS1_...         0.00%       0.000us         0.00%       0.000us       0.000us       2.715ms         0.67%       2.715ms      18.854us           144  
+void at::native::elementwise_kernel<128, 2, at::nati...         0.00%       0.000us         0.00%       0.000us       0.000us       2.648ms         0.65%       2.648ms       2.942us           900  
+      NeighborhoodAttention1DQKAutogradFunctionBackward         0.25%       6.389ms         0.39%       9.870ms     137.082us       2.579ms         0.63%       2.579ms      35.825us            72  
+                                            aten::index         0.27%       6.804ms         1.41%      35.816ms     129.768us       2.504ms         0.62%       4.237ms      15.352us           276  
+void at::native::index_elementwise_kernel<128, 4, at...         0.00%       0.000us         0.00%       0.000us       0.000us       2.504ms         0.62%       2.504ms      10.981us           228  
+                                              aten::mul         0.88%      22.376ms         1.37%      34.718ms      19.681us       2.491ms         0.61%       2.491ms       1.412us          1764  
+              NeighborhoodAttention1DQKAutogradFunction         0.28%       7.224ms         0.52%      13.222ms     183.638us       2.381ms         0.58%       2.730ms      37.918us            72  
+void at::native::vectorized_elementwise_kernel<4, at...         0.00%       0.000us         0.00%       0.000us       0.000us       2.366ms         0.58%       2.366ms       1.517us          1560  
+_ZN6natten4cuda4gemm6KernelIN7cutlass4arch4Sm80ENS1_...         0.00%       0.000us         0.00%       0.000us       0.000us       2.365ms         0.58%       2.365ms      16.421us           144  
+                         aten::embedding_dense_backward         0.03%     647.224us         0.11%       2.820ms      46.995us       2.267ms         0.56%       2.338ms      38.971us            60  
+void at::native::(anonymous namespace)::embedding_ba...         0.00%       0.000us         0.00%       0.000us       0.000us       2.267ms         0.56%       2.267ms      37.777us            60  
+                                              aten::cat         0.33%       8.465ms         0.52%      13.277ms      23.050us       2.248ms         0.55%       2.248ms       3.903us           576  
+                                ampere_sgemm_128x128_nt         0.00%       0.000us         0.00%       0.000us       0.000us       2.248ms         0.55%       2.248ms       7.805us           288  
+                                              aten::add         0.45%      11.326ms         0.68%      17.300ms      19.222us       2.095ms         0.51%       2.095ms       2.327us           900  
+void at::native::(anonymous namespace)::layer_norm_g...         0.00%       0.000us         0.00%       0.000us       0.000us       2.071ms         0.51%       2.071ms       3.028us           684  
+                       ampere_sgemm_128x32_sliced1x4_tn         0.00%       0.000us         0.00%       0.000us       0.000us       2.013ms         0.49%       2.013ms      16.775us           120  
+void wgrad_alg0_engine<float, 128, 5, 5, 3, 3, 3, fa...         0.00%       0.000us         0.00%       0.000us       0.000us       1.871ms         0.46%       1.871ms      51.985us            36  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+Self CPU time total: 2.542s
+Self CUDA time total: 407.103ms
