@@ -50,8 +50,7 @@ export NCCL_BUFFSIZE=8388608     # 8MB buffer
 
 ### 2. 显存：48GB vs 144GB
 
-L40S 每卡 48GB，但 Pluto 模型很小（H200 上仅用 18-29GB），48GB 完全足够。
-batch_size 保持 384 (48/卡) 不变。
+L40S 每卡 45GB 可用，FP32 bs=128 (16/卡) 使用 31-45GB。
 
 ### 3. 计算性能
 
@@ -61,23 +60,23 @@ batch_size 保持 384 (48/卡) 不变。
 | FP32 TFLOPS | 67 | 91 | L40S 略高 |
 | 显存带宽 | 4.8 TB/s (HBM3e) | 864 GB/s (GDDR6) | L40S = 18% |
 
-预期训练速度：L40S 约为 H200 的 20-30%（受 BF16 算力和显存带宽限制）。
+**实测结果**: L40S FP32+nearest 每 Epoch ~14 min，比 H200 BF16+linear ~39 min 更快（Pluto 模型太小，H200 算力严重过剩）。
 
 ### 4. 网络
 
-g6e 无 EFA，使用 100 Gbps ENA。单节点 8 卡训练不受影响（GPU 间通信走 PCIe）。
+g6e 无 EFA，使用 400 Gbps ENA。单节点 8 卡训练不受影响（GPU 间通信走 PCIe）。需设 `NCCL_NET=Socket` 禁用 OFI 插件。
 
 ## 性能调优 checklist
 
-- [x] bf16-mixed 精度（BF16 算力远高于 FP32）
-- [x] NCCL Ring 算法 + PCIe P2P 优化
-- [x] CUDA_DEVICE_MAX_CONNECTIONS=1（compute/communication overlap）
-- [x] PyTorch CUDA 内存分配器优化
+- [x] **F.interpolate mode="nearest"**（关键优化！linear 占 63.6% GPU 时间，改 nearest 后训练加速 47%）
+- [x] FP32 精度（BF16 在此模型无优势且 loss 更差）
+- [x] NCCL Ring 算法 + PCIe P2P + Socket 网络
+- [x] CUDA_DEVICE_MAX_CONNECTIONS=1
 - [x] NVMe SSD 用于数据和 cache
-- [ ] torch.compile（需验证 Pluto 兼容性，可能需要修改代码）
-- [ ] Flash Attention（Pluto 使用 NATTEN，不直接适用）
-- [ ] 更大 batch size（如显存允许，可尝试 512 即 64/卡）
-- [ ] gradient accumulation（如 PCIe 通信是瓶颈，可累积梯度减少 all-reduce 频率）
+- [x] NCCL_NET=Socket（禁用 OFI/EFA 插件）
+- [x] RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO=0（Ray worker GPU 可见性）
+- [x] torch.compile — 已测试，对 F.interpolate 瓶颈无效
+- [ ] 禁用 RichProgressBar（可再省 ~15%）
 
 ## 推荐 AMI 查询
 
@@ -114,11 +113,28 @@ tail -f /home/ubuntu/train_g6e.log
 watch -n 5 nvidia-smi
 ```
 
-## 预期结果
+## 实测结果
 
-基于 H200 benchmark 数据外推：
-- Feature Cache: ~3-4 小时（H200 约 2.5 小时，受 CPU/IO 限制差异不大）
-- 每 Epoch 训练: ~120-180 分钟（H200 约 39 分钟，受 BF16 算力差距影响）
-- 总训练 25 Epoch: ~50-75 小时
+| 阶段 | 耗时 |
+|------|------|
+| Feature Cache (32 Ray workers) | ~5 小时 |
+| 每 Epoch (FP32 + nearest, bs=128) | ~14 min |
+| 25 Epoch 训练预计 | ~6 小时 |
+| 总计（含 cache） | ~11 小时 |
 
-注意：以上为粗略估算，实际性能取决于 PCIe 通信开销和模型特性。
+## Pluto 代码必要修改
+
+在运行 benchmark 前需要修改 Pluto 代码：
+
+```bash
+# 1. embedding.py: F.interpolate mode 改为 nearest（关键性能优化）
+# src/models/pluto/layers/embedding.py:81
+#   mode="linear" → mode="nearest"
+#   删除 align_corners=False 行
+
+# 2. agent_encoder.py:83: 加 dtype（FP32 下非必须，BF16 需要）
+# 3. custom_training/__init__.py: 加 TrainingEngine 等 import
+# 4. 创建 pluto.pth: echo "/opt/dlami/nvme/pluto" > $(python -c "import site; print(site.getsitepackages()[0])")/pluto.pth
+```
+
+详见 [G6E-BENCHMARK-REPORT.md](G6E-BENCHMARK-REPORT.md) 完整修改列表。

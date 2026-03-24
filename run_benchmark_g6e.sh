@@ -26,24 +26,23 @@ export NCCL_MAX_NCHANNELS=12
 export NCCL_BUFFSIZE=8388608             # 8MB buffer，改善 PCIe 吞吐
 export NCCL_P2P_LEVEL=PHB                # PCIe Host Bridge 级别 P2P
 export CUDA_DEVICE_MAX_CONNECTIONS=1     # 改善 compute/communication overlap
-
-# PyTorch 性能优化
-export TORCH_CUDNN_V8_API_ENABLED=1      # 启用 cuDNN v8 API
-export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True  # 优化显存分配
+export NCCL_NET=Socket                   # g6e 无 EFA，禁用 OFI 插件
 
 # Ray worker GPU 可见性 - 防止 NATTEN import 时找不到 GPU
 export RAY_ACCEL_ENV_VAR_OVERRIDE_ON_ZERO=0
 export HYDRA_FULL_ERROR=1
 
 # ============================================================
-# L40S 特定训练参数调整（对比 H200）:
+# 最优训练配置 (基于 CUDA profiling 结果):
 #
-# | 参数         | H200           | G6e (L40S)        | 原因                    |
-# |-------------|----------------|-------------------|------------------------|
-# | batch_size  | 384 (48/卡)    | 384 (48/卡)       | 模型小，48GB足够        |
-# | precision   | bf16-mixed     | bf16-mixed        | L40S 支持 BF16          |
-# | num_workers | 32             | 16                | g6e vCPU 较少           |
-# | Ray workers | 40             | 32                | g6e vCPU=192, 留余量    |
+# - precision=32 (FP32): BF16 在此模型无速度优势且 loss 更差
+# - batch_size=128 (16/卡): FP32 下 44GB 显存安全上限
+# - mode="nearest": Pluto embedding.py 需先修改 F.interpolate
+#   (原始 mode="linear" 占 63.6% GPU 时间，是压倒性瓶颈)
+#
+# 修改 Pluto 代码 (embedding.py:81):
+#   mode="linear" → mode="nearest"
+#   删除 align_corners=False 行
 # ============================================================
 
 cd /opt/dlami/nvme/pluto
@@ -77,7 +76,7 @@ if [ "$CACHE_COUNT" -eq 0 ]; then
 fi
 
 echo "========================================="
-echo "Step 2: Training on 8x L40S"
+echo "Step 2: Training on 8x L40S (FP32 + nearest)"
 echo "Start: $(date)"
 echo "========================================="
 
@@ -85,7 +84,6 @@ echo "========================================="
 nvidia-smi dmon -s umt -d 10 > /home/ubuntu/gpu_monitor_g6e.log 2>&1 &
 GPU_MON_PID=$!
 
-# 同时记录 NCCL 通信信息（首次运行建议开启，后续可关闭）
 export NCCL_DEBUG=WARN
 
 CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python run_training.py \
@@ -94,16 +92,16 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 python run_training.py \
     scenario_builder=nuplan \
     cache.cache_path=/nuplan/exp/cache_pluto \
     cache.use_cache_without_dataset=true \
-    data_loader.params.batch_size=384 \
+    data_loader.params.batch_size=128 \
     data_loader.params.num_workers=16 \
-    lr=1e-3 epochs=3 warmup_epochs=1 weight_decay=0.0001 \
+    lr=1e-3 epochs=25 warmup_epochs=3 weight_decay=0.0001 \
     lightning.trainer.params.accelerator=gpu \
     lightning.trainer.params.devices=8 \
     lightning.trainer.params.strategy=ddp_find_unused_parameters_false \
-    lightning.trainer.params.precision=bf16-mixed \
+    lightning.trainer.params.precision=32 \
     wandb.mode=disabled \
     wandb.project=g6e-benchmark \
-    wandb.name=pluto-8xL40S \
+    wandb.name=pluto-8xL40S-fp32-nearest \
     2>&1 | tee /home/ubuntu/train_g6e.log
 
 kill $GPU_MON_PID 2>/dev/null
