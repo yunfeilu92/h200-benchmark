@@ -121,13 +121,29 @@
    - Transformer 的 matmul 只占 13.2%
    - 大部分 GPU 算力在等 linear interpolation
 
+### torch.compile 测试 (PyTorch 2.5.0+cu124)
+
+使用 `torch.compile(model, mode="default")` 对比：
+
+| 指标 | 无 compile | 有 compile | 变化 |
+|------|-----------|-----------|------|
+| upsample_linear1d forward | 116.4ms (28.6%) | 116.4ms (30.3%) | 不变 |
+| upsample_linear1d backward | 142.3ms (35.0%) | 142.3ms (37.0%) | 不变 |
+| interpolate 总计 | 258.7ms (63.6%) | 258.8ms (67.2%) | **不变** |
+| Self CUDA total | 407.1ms | 384.8ms | 略快 5% |
+
+**结论**: `torch.compile` 优化了 elementwise 等小操作，但 **`F.interpolate` 的 CUDA kernel 无法被 Inductor 优化** — 它是独立的 C++ kernel，不在融合范围内。NATTEN 也会导致 graph break（`na1d_qk_forward` / `na1d_av_forward` 不被 dynamo 支持）。
+
+此外 `mode="reduce-overhead"` 因使用 CUDA Graphs 与重复 batch 的 backward 冲突，无法使用。
+
 ### 优化建议
 
-| 方案 | 预期效果 | 改动量 |
-|------|---------|--------|
-| 改 `mode="nearest"` | 省 ~60% GPU 时间 | 改 1 行 |
-| 改 learnable ConvTranspose1d | 省 ~60% + 走 Tensor Core + 可学习 | 改 ~15 行 |
-| 禁用 RichProgressBar | 省 ~15% 训练时间 (PL overhead) | 加 1 行配置 |
+| 方案 | 预期效果 | 改动量 | 状态 |
+|------|---------|--------|------|
+| 改 `mode="nearest"` | 省 ~60% GPU 时间 | 改 1 行 | 待测试 |
+| 改 learnable ConvTranspose1d | 省 ~60% + 走 Tensor Core + 可学习 | 改 ~15 行 | 待测试 |
+| `torch.compile` | 省 ~5% (仅小操作) | 加 1 行 | ❌ 对瓶颈无效 |
+| 禁用 RichProgressBar | 省 ~15% 训练时间 (PL overhead) | 加 1 行配置 | 待测试 |
 
 ## Feature Cache 阶段
 
@@ -194,4 +210,4 @@ Ray workers 无法 import `src.models`，在 venv site-packages 添加 `/opt/dla
 | 显存使用 | 18-29 GB (12-20%) | 38-45 GB (85-100%) |
 | 功耗 | ~145W (20% TDP) | 100-195W (28-56% TDP) |
 
-**注意**: L40S 每 epoch 更快是因为 batch size 更小导致步数更多但每步更快。两者都未能充分利用 GPU 算力 — Pluto 模型太小 (4.1M 参数)。CUDA profile 显示 63.6% 的 GPU 时间花在 `F.interpolate(mode="linear")` 上，而非 Transformer 计算。
+**注意**: L40S 每 epoch 更快是因为 batch size 更小导致步数更多但每步更快。CUDA profile 显示 63.6% 的 GPU 时间花在 `F.interpolate(mode="linear")` 上（FPN 的 1D 时间维度上采样：6→11 和 11→21），而非 Transformer 计算。`torch.compile` 无法优化该 kernel，需要改用 `mode="nearest"` 或 learnable ConvTranspose1d 来消除瓶颈。
